@@ -1,0 +1,190 @@
+USE vk;
+
+##########################################################################
+-- <6.1 Создать все необходимые внешние ключи и диаграмму отношений.>
+
+-- ----------------------------- friendship
+ALTER TABLE friendship 
+  ADD CONSTRAINT friendship_user_id_fk 
+    FOREIGN KEY (user_id) REFERENCES users(id)
+	ON DELETE CASCADE, -- при удалении пользователя с кем он дружил уже ненужная информация, удаляем.
+  ADD CONSTRAINT friendship_frend_id_fk 
+    FOREIGN KEY (friend_id) REFERENCES users(id)
+	ON DELETE CASCADE; -- // --.
+
+DESC friendship;
+ALTER TABLE friendship 
+  ADD CONSTRAINT friendship_status_id_fk 
+    FOREIGN KEY (status_id) REFERENCES friendship_statuses(id)
+	ON DELETE NO ACTION; -- запрещаем удалять статус если уже используется.
+	
+-- ----------------------------- communities_users	
+ALTER TABLE communities_users 
+  ADD CONSTRAINT communities_users_user_id_fk 
+    FOREIGN KEY (user_id) REFERENCES users(id)
+	ON DELETE CASCADE; -- таблица в каких группах состоял пользователь при удалении пользователя удаляем.
+	
+ALTER TABLE communities_users 
+  ADD CONSTRAINT communities_users_communities_id_fk 
+    FOREIGN KEY (community_id) REFERENCES communities(id)
+	ON DELETE CASCADE; -- если удаляется группа, то посты этой группы удаляем
+	
+-- ----------------------------- posts	
+ALTER TABLE posts 
+  ADD CONSTRAINT posts_user_id_fk 
+    FOREIGN KEY (user_id) REFERENCES users(id)
+	ON DELETE CASCADE; -- посты при удалении пользователя удаляем.
+	
+ALTER TABLE posts 
+  ADD CONSTRAINT posts_media_id_fk 
+    FOREIGN KEY (media_id) REFERENCES media(id)
+	ON DELETE NO ACTION;
+	
+ALTER TABLE posts 
+  ADD CONSTRAINT posts_communities_id_fk 
+    FOREIGN KEY (community_id) REFERENCES communities(id)
+	ON DELETE CASCADE; -- если удаляется группа, то посты этой группы удаляем
+	
+-- ----------------------------- likes
+DESC likes;
+ALTER TABLE likes MODIFY user_id int unsigned; -- я считаю лайки надо оставить при удалении юзера,
+	-- поэтому снимаю запрет null
+ALTER TABLE likes 
+  ADD CONSTRAINT likes_user_id_fk 
+    FOREIGN KEY (user_id) REFERENCES users(id)
+	ON DELETE SET NULL; --  лайки при удалении пользователя оставляем.
+	
+-- ALTER TABLE likes DROP FOREIGN KEY likes_user_id_fk; - тестировал разные варианты,
+-- несколько раз удалял
+
+ALTER TABLE likes 
+  ADD CONSTRAINT likes_target_type_id_fk 
+    FOREIGN KEY (target_type_id) REFERENCES target_types(id)
+	ON DELETE NO ACTION; -- не даем удалить тип таргета если на него уже есть ссылки
+	
+ALTER TABLE likes 
+  ADD CONSTRAINT likes_target_messages_id_fk 
+    FOREIGN KEY (target_id) REFERENCES messages(id)
+	ON DELETE CASCADE, -- если удаляют то чему поставили лайк, в лайке больше нет смысла удаляем	
+  ADD CONSTRAINT likes_target_users_id_fk 
+    FOREIGN KEY (target_id) REFERENCES users(id)
+	ON DELETE CASCADE, -- // --	
+  ADD CONSTRAINT likes_target_media_id_fk 
+    FOREIGN KEY (target_id) REFERENCES media(id)
+	ON DELETE CASCADE; -- // --	
+	
+ALTER TABLE likes	
+  ADD CONSTRAINT likes_target_posts_id_fk 
+    FOREIGN KEY (target_id) REFERENCES posts(id)
+	ON DELETE CASCADE; -- тут интересно, пока не заполнил посты, не мог добавить данный внешний ключ
+	-- т.к. лайки уже были заполнены )	
+	
+	
+-- ----------------------------- media
+ALTER TABLE media 
+  ADD CONSTRAINT media_type_id_fk 
+    FOREIGN KEY (media_type_id) REFERENCES media_types(id)
+	ON DELETE NO ACTION;	
+
+##########################################################################
+-- <6.2 Создать и заполнить таблицы лайков и постов.>
+
+mysqldump --no-data vk > schema_vk.sql -- для http://filldb.info/
+
+-- для заполнения лайков взял готовый кусок
+INSERT INTO likes 
+  SELECT 
+    id, 
+    FLOOR(1 + (RAND() * 100)), 
+    FLOOR(1 + (RAND() * 100)),
+    FLOOR(1 + (RAND() * 4)),
+    CURRENT_TIMESTAMP 
+  FROM messages;
+  
+-- заполнение постов
+INSERT INTO posts (id, user_id, community_id, head, body, media_id)
+  SELECT 
+    id, 
+	from_user_id as user_id,
+	FLOOR(1 + (RAND() * 100)) as community_id, 
+	'Некий заголовок' as head,
+	'Текст поста' as body,
+	FLOOR(1 + (RAND() * 100)) as media_id 
+  FROM messages;
+ 
+##########################################################################
+-- <6.3 Определить кто больше поставил лайков (всего) - мужчины или женщины?>
+
+SELECT 
+	profiles.gender as gender,
+	count(*) as count_likes
+FROM profiles as profiles
+INNER JOIN users as users
+	ON profiles.user_id = users.id
+INNER JOIN likes as likes
+	ON likes.user_id = users.id
+GROUP BY 
+	profiles.gender
+ORDER BY 
+	count_likes desc
+LIMIT 1
+
+##########################################################################
+-- <6.4. Подсчитать количество лайков которые получили 10 самых молодых пользователей.>
+SELECT SUM(count_likes) FROM (
+		SELECT 
+			profiles.birthday as birthday,
+			count(*) as count_likes
+		FROM profiles as profiles
+		INNER JOIN users as users
+			ON profiles.user_id = users.id
+		INNER JOIN likes as likes
+			ON likes.user_id = users.id
+		GROUP BY 
+			birthday
+		ORDER BY 
+			birthday desc
+		LIMIT 10
+	) as count_likes_top
+
+##########################################################################
+-- <6.5. Найти 10 пользователей, которые проявляют наименьшую активность в
+		-- использовании социальной сети
+		-- (критерии активности необходимо определить самостоятельно).>
+		
+	-- Решил измерять активность по постам, сообщениям, опубликованным медиа
+	-- и лайкам, всему поставим условные коэффициенты:
+	
+SELECT 
+	user_id as user_id,
+	SUM(activity_amount) as activity_amount 
+FROM (
+		SELECT
+			user_id as user_id,
+			SUM(10) as activity_amount
+		FROM posts
+		GROUP BY user_id
+		UNION
+		SELECT
+			from_user_id,
+			SUM(3)
+		FROM messages 
+		GROUP BY from_user_id
+		UNION
+		SELECT
+			user_id,
+			SUM(5)
+		FROM media
+		GROUP BY user_id
+		UNION
+		SELECT
+			user_id,
+			SUM(1)
+		FROM likes
+		GROUP BY user_id
+	) as tmp
+GROUP BY
+	user_id
+ORDER BY
+	activity_amount
+LIMIT 10	
