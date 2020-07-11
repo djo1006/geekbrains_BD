@@ -1,0 +1,84 @@
+USE shop;
+
+---------------------------------------------------- 1
+SELECT 
+	users.name
+FROM
+	users as users
+JOIN (	SELECT DISTINCT  
+		user_id as user_id
+		FROM orders ) as tmp
+ON users.id = tmp.user_id;
+
+---------------------------------------------------- 2
+SELECT 
+	products.name as product,
+	catalogs.name as catalog
+FROM 
+	products as products
+LEFT JOIN catalogs as catalogs
+ON products.catalog_id = catalogs.id;
+
+---------------------------------------------------- 3
+CREATE TEMPORARY TABLE flights_1 (
+          id SERIAL PRIMARY KEY, 
+          fl_from VARCHAR(50), 
+          fl_to VARCHAR(50)
+        );
+		
+INSERT INTO flights_1 VALUES
+(1,'moscow','omsk'),
+(2,'novgorod','kazan'),
+(3,'irkutsk','moscow');
+
+CREATE TEMPORARY TABLE cities_1 (
+          label VARCHAR(50), 
+          name VARCHAR(50)
+        );
+
+INSERT INTO cities_1 VALUES
+('moscow','Москва'),
+('omsk','Омск'),
+('novgorod','Новгород'),
+('kazan','Казань'),
+('irkutsk','Иркутск');
+
+-- Нельзя обращаться к временной 2 раза в одном запросе, странно в mssql можно
+-- Чтобы заработали 2 нижних запроса добавил еще одну временную, это конечно плохое решение,
+-- Интересно узнать как обойти проблему
+
+CREATE TEMPORARY TABLE cities_2 (
+          label VARCHAR(50), 
+          name VARCHAR(50)
+        );
+
+INSERT INTO cities_2 VALUES
+('moscow','Москва'),
+('omsk','Омск'),
+('novgorod','Новгород'),
+('kazan','Казань'),
+('irkutsk','Иркутск');
+		
+-- 3.1
+SELECT 
+	flights.id,
+	cities_from.name as fl_from,
+	cities_to.name as fl_to
+FROM flights_1 as flights
+
+JOIN cities_1 as cities_from
+ON flights.fl_from = cities_from.label
+
+JOIN cities_2 as cities_to
+ON flights.fl_to = cities_to.label
+
+ORDER BY id
+
+-- 3.2
+SELECT 
+	flights.id as id,
+	(SELECT name FROM cities_1 WHERE label = flights.fl_from ) as fl_from,
+	(SELECT name FROM cities_2 WHERE label = flights.fl_to ) as fl_to	
+FROM flights_1 as flights
+ORDER BY id
+	
