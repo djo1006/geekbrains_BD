@@ -1,0 +1,70 @@
+##########################################################################
+-- <6.3 Определить кто больше поставил лайков (всего) - мужчины или женщины?>
+
+SELECT 
+	profiles.gender as gender,
+	count(*) as count_likes
+FROM profiles as profiles
+
+INNER JOIN likes as likes
+	ON likes.user_id = profiles.user_id
+
+GROUP BY 
+	profiles.gender
+ORDER BY 
+	count_likes desc
+LIMIT 1
+
+##########################################################################
+-- <6.4. Подсчитать количество лайков которые получили 10 самых молодых пользователей.>
+
+SELECT SUM(count_likes) FROM (
+		SELECT 
+			profiles.birthday as birthday,
+			count(*) as count_likes
+		FROM profiles as profiles		
+		INNER JOIN likes as likes
+			ON likes.target_id = profiles.user_id
+		GROUP BY 
+			birthday
+		ORDER BY 
+			birthday desc
+		LIMIT 10
+	) as count_likes_top
+	
+##########################################################################
+-- <6.5. Найти 10 пользователей, которые проявляют наименьшую активность в
+		-- использовании социальной сети
+		-- (критерии активности необходимо определить самостоятельно).>
+		
+	-- Решил измерять активность по постам, сообщениям, опубликованным медиа
+	-- и лайкам, всему поставим условные коэффициенты
+	-- переписал на левое, но объединение мне кажется эффективнее:
+	
+SELECT
+	users.id as id,
+	SUM(IF(posts.user_id is null,0,10)
+	+ IF (messages.from_user_id is null,0,3)
+	+ IF (media.user_id is null,0,5)
+	+ IF (likes.user_id is null,0,1) ) as activity_amount
+
+FROM users as users
+
+LEFT JOIN posts posts
+ON posts.user_id = users.id
+
+LEFT JOIN messages messages
+ON messages.from_user_id = users.id  
+
+LEFT JOIN media as media
+ON media.user_id = users.id
+
+LEFT JOIN likes as likes
+ON likes.user_id = users.id
+
+GROUP BY id
+
+ORDER BY activity_amount
+
+LIMIT 10
+
