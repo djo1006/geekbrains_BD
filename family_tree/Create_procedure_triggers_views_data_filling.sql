@@ -117,7 +117,7 @@ DROP VIEW IF EXISTS `return_age_years`//
 CREATE VIEW `return_age_years` AS 
 	SELECT 
 		life_events_birth.people_id,
-		TIMESTAMPDIFF(YEAR, life_events_birth.event_date, IF(life_events_death.event_date IS NULL, NOW(), life_events_death.event_date))
+		TIMESTAMPDIFF(YEAR, life_events_birth.event_date, IF(life_events_death.event_date IS NULL, NOW(), life_events_death.event_date)) as age_years
 	FROM life_events as life_events_birth
 	LEFT OUTER JOIN life_events as life_events_death
 	ON life_events_death.people_id = life_events_birth.people_id
